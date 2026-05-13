@@ -282,9 +282,18 @@ def main():
 
     # ── Step 1: EN→FR vocabularies ────────────────────────────────────────────
     print("── Step 1: EN→FR vocabularies ───────────────────────────────────")
-    src_tok, tgt_tok = build_en_fr_tokenizers()
-    save_vocab(src_tok, MODELS_DIR / "vocab_en_src.json")
-    save_vocab(tgt_tok, MODELS_DIR / "vocab_fr_tgt.json")
+    en_src_path = MODELS_DIR / "vocab_en_src.json"
+    fr_tgt_path = MODELS_DIR / "vocab_fr_tgt.json"
+
+    if en_src_path.exists() and fr_tgt_path.exists():
+        print("[vocab] vocab_en_src.json and vocab_fr_tgt.json already present — skipping rebuild.")
+    else:
+        print("[vocab] Building EN→FR vocabularies from fra.txt …")
+        src_tok, tgt_tok = build_en_fr_tokenizers()
+        if not en_src_path.exists():
+            save_vocab(src_tok, en_src_path)
+        if not fr_tgt_path.exists():
+            save_vocab(tgt_tok, fr_tgt_path)
 
     # ── Step 2: Migrate EN→FR notebook weights ────────────────────────────────
     print("\n── Step 2: EN→FR model migration ────────────────────────────────")
