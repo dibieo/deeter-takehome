@@ -18,18 +18,20 @@ class TransformerEncoder(keras.Layer):
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
         key_dim = hidden_dim // num_heads
+        # Attribute names match the Colab notebook exactly so that weight paths
+        # in .keras files saved there deserialize without name-mapping errors.
         self.self_attention = layers.MultiHeadAttention(num_heads, key_dim)
-        self.norm1 = layers.LayerNormalization()
-        self.ff1 = layers.Dense(intermediate_dim, activation="relu")
-        self.ff2 = layers.Dense(hidden_dim)
-        self.norm2 = layers.LayerNormalization()
+        self.self_attention_layernorm = layers.LayerNormalization()
+        self.feed_forward_1 = layers.Dense(intermediate_dim, activation="relu")
+        self.feed_forward_2 = layers.Dense(hidden_dim)
+        self.feed_forward_layernorm = layers.LayerNormalization()
 
     def call(self, source, source_mask):
         mask = source_mask[:, None, :]
         attn = self.self_attention(query=source, key=source, value=source, attention_mask=mask)
-        x = self.norm1(source + attn)
-        ff = self.ff2(self.ff1(x))
-        return self.norm2(x + ff)
+        x = self.self_attention_layernorm(source + attn)
+        ff = self.feed_forward_2(self.feed_forward_1(x))
+        return self.feed_forward_layernorm(x + ff)
 
     def get_config(self):
         config = super().get_config()
@@ -51,21 +53,21 @@ class TransformerDecoder(keras.Layer):
         self.num_heads = num_heads
         key_dim = hidden_dim // num_heads
         self.self_attention = layers.MultiHeadAttention(num_heads, key_dim)
-        self.norm1 = layers.LayerNormalization()
+        self.self_attention_layernorm = layers.LayerNormalization()
         self.cross_attention = layers.MultiHeadAttention(num_heads, key_dim)
-        self.norm2 = layers.LayerNormalization()
-        self.ff1 = layers.Dense(intermediate_dim, activation="relu")
-        self.ff2 = layers.Dense(hidden_dim)
-        self.norm3 = layers.LayerNormalization()
+        self.cross_attention_layernorm = layers.LayerNormalization()
+        self.feed_forward_1 = layers.Dense(intermediate_dim, activation="relu")
+        self.feed_forward_2 = layers.Dense(hidden_dim)
+        self.feed_forward_layernorm = layers.LayerNormalization()
 
     def call(self, target, source, source_mask):
         self_attn = self.self_attention(query=target, key=target, value=target, use_causal_mask=True)
-        x = self.norm1(target + self_attn)
+        x = self.self_attention_layernorm(target + self_attn)
         mask = source_mask[:, None, :]
         cross = self.cross_attention(query=x, key=source, value=source, attention_mask=mask)
-        x = self.norm2(x + cross)
-        ff = self.ff2(self.ff1(x))
-        return self.norm3(x + ff)
+        x = self.cross_attention_layernorm(x + cross)
+        ff = self.feed_forward_2(self.feed_forward_1(x))
+        return self.feed_forward_layernorm(x + ff)
 
     def get_config(self):
         config = super().get_config()

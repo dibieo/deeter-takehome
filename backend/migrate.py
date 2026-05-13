@@ -187,8 +187,16 @@ def migrate_transformer():
 
     out_path = MODELS_DIR / "transformer_en_fr.keras"
     if out_path.exists():
-        print(f"[migrate] {out_path.name} already exists — skipping.")
-        return
+        # Validate that the file actually loads with the current layer definitions.
+        # A previously migrated file built with old attribute names (ff1/norm1 etc.)
+        # will fail here; deleting it triggers a clean re-migration below.
+        try:
+            keras.models.load_model(str(out_path), custom_objects=CUSTOM_OBJECTS)
+            print(f"[migrate] {out_path.name} already exists and loads cleanly — skipping.")
+            return
+        except Exception as exc:
+            print(f"[migrate] {out_path.name} failed validation ({type(exc).__name__}) — re-migrating.")
+            out_path.unlink()
 
     if not NOTEBOOK_TFM.exists():
         print(f"[migrate] {NOTEBOOK_TFM.name} not found — skipping Transformer migration.")
