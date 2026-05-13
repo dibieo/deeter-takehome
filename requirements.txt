@@ -1,0 +1,6 @@
+tensorflow>=2.16
+keras>=3.0
+fastapi>=0.111
+uvicorn[standard]>=0.29
+pydantic>=2.0
+numpy>=1.26

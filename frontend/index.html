@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Neural Machine Translator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">⟨⟩</span>
+        <div>
+          <h1>Neural Machine Translator</h1>
+          <p class="tagline">English ↔ French &nbsp;·&nbsp; GRU &amp; Transformer</p>
+        </div>
+      </div>
+      <div class="model-selector" role="group" aria-label="Model selector">
+        <button id="btn-rnn" class="model-btn" data-model="rnn">
+          <span class="model-btn-label">GRU (RNN)</span>
+          <span class="model-btn-sub">Sequential</span>
+        </button>
+        <button id="btn-transformer" class="model-btn active" data-model="transformer">
+          <span class="model-btn-label">Transformer</span>
+          <span class="model-btn-sub">Attention</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Main ───────────────────────────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- Language bar -->
+    <div class="lang-bar">
+      <div class="lang-select" id="src-lang-select">
+        <button class="lang-btn active" data-lang="en" data-side="src">🇺🇸 English</button>
+        <button class="lang-btn" data-lang="fr" data-side="src">🇫🇷 French</button>
+      </div>
+
+      <button class="swap-btn" id="swap-btn" title="Swap languages" aria-label="Swap languages">
+        ⇄
+      </button>
+
+      <div class="lang-select" id="tgt-lang-select">
+        <button class="lang-btn" data-lang="en" data-side="tgt">🇺🇸 English</button>
+        <button class="lang-btn active" data-lang="fr" data-side="tgt">🇫🇷 French</button>
+      </div>
+    </div>
+
+    <!-- Translation panels -->
+    <div class="panels">
+      <!-- Source panel -->
+      <div class="panel panel-src">
+        <textarea
+          id="src-text"
+          class="panel-textarea"
+          placeholder="Type or paste text here…"
+          maxlength="500"
+          spellcheck="true"
+          autofocus
+        ></textarea>
+        <div class="panel-footer">
+          <span id="char-count" class="char-count">0 / 500</span>
+          <button id="clear-btn" class="icon-btn" title="Clear" aria-label="Clear text">✕</button>
+        </div>
+      </div>
+
+      <!-- Target panel -->
+      <div class="panel panel-tgt">
+        <div id="tgt-text" class="panel-output" aria-live="polite" aria-label="Translation output">
+          <span class="placeholder">Translation will appear here</span>
+        </div>
+        <div class="panel-footer">
+          <span id="model-badge" class="model-badge">Transformer</span>
+          <button id="copy-btn" class="icon-btn" title="Copy translation" aria-label="Copy translation">⎘</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Translate button + status -->
+    <div class="actions">
+      <button id="translate-btn" class="translate-btn">
+        <span id="btn-text">Translate</span>
+        <span id="btn-spinner" class="spinner hidden" aria-hidden="true"></span>
+      </button>
+      <p id="error-msg" class="error-msg hidden" role="alert"></p>
+    </div>
+
+    <!-- Model explainer -->
+    <section class="explainer">
+      <div class="explainer-card" id="explainer-rnn">
+        <h3>GRU (Gated Recurrent Unit)</h3>
+        <p>
+          A <strong>sequence-to-sequence RNN</strong> with a bidirectional GRU encoder and
+          a unidirectional GRU decoder. The encoder compresses the entire source sentence
+          into a single hidden state that seeds the decoder. Simple, fast, and interpretable —
+          but the fixed-size bottleneck limits performance on longer sentences.
+        </p>
+      </div>
+      <div class="explainer-card active" id="explainer-transformer">
+        <h3>Transformer</h3>
+        <p>
+          A full <strong>encoder-decoder Transformer</strong> with multi-head self-attention,
+          cross-attention, and learned positional embeddings. Every token attends to every
+          other token in parallel, so the model captures long-range dependencies far better
+          than an RNN. Generally produces higher-quality translations, especially for
+          complex sentences.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ── Footer ─────────────────────────────────────────────────────────── -->
+  <footer class="footer">
+    <p>
+      Trained on the
+      <a href="http://www.manythings.org/anki/" target="_blank" rel="noopener">Tatoeba English–French dataset</a>
+      &nbsp;·&nbsp;
+      Built with <a href="https://keras.io" target="_blank" rel="noopener">Keras</a>
+      &amp; <a href="https://fastapi.tiangolo.com" target="_blank" rel="noopener">FastAPI</a>
+    </p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
