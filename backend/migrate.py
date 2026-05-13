@@ -1,16 +1,23 @@
 """
 migrate.py — Migrate pre-trained notebook models to the web app format.
 
-The notebook trained two EN→FR models whose Keras input tensors are named
-"english" / "french". The web app expects "source" / "target".  This script:
+EN→FR (original notebook weights, input names "english"/"french"):
+  1. Rebuilds each architecture with the correct input names ("source"/"target").
+  2. Transfers weights from the notebook checkpoint.
+  3. Saves as rnn_en_fr.keras / transformer_en_fr.keras.
+  4. Builds and saves EN→FR vocabularies (vocab_en_src.json, vocab_fr_tgt.json).
 
-  1. Rebuilds each architecture with the correct input names.
-  2. Transfers weights layer-by-layer from the notebook checkpoint.
-  3. Saves the migrated models as rnn_en_fr.keras / transformer_en_fr.keras.
-  4. Builds and saves the EN→FR vocabularies so the app can tokenize text.
+FR→EN (weights trained in Colab, already use "source"/"target"):
+  No weight migration needed — models are already in the correct format.
+  5. Builds and saves FR→EN vocabularies (vocab_fr_src.json, vocab_en_tgt.json)
+     if the JSON files are not already present (e.g. downloaded from Drive).
+  6. Reports which FR→EN model files are present / missing.
 
-It does NOT produce FR→EN models — run `python -m backend.train --dir fr_en`
-for those.
+Expected files in models/ after running the Colab notebook and downloading:
+    rnn_fr_en.keras
+    transformer_fr_en.keras
+    vocab_fr_src.json   (optional — rebuilt from fra.txt if absent)
+    vocab_en_tgt.json   (optional — rebuilt from fra.txt if absent)
 
 Usage:
     python -m backend.migrate
@@ -62,8 +69,47 @@ def ensure_data():
 
 
 def build_en_fr_tokenizers():
-    import random
     from keras import layers
+
+    train_pairs = _load_train_pairs()
+
+    src_tok = layers.TextVectorization(
+        max_tokens=VOCAB_SIZE, output_mode="int",
+        output_sequence_length=SEQ_LEN,
+    )
+    tgt_tok = layers.TextVectorization(
+        max_tokens=VOCAB_SIZE, output_mode="int",
+        output_sequence_length=SEQ_LEN + 1,
+        standardize=_custom_standardize,
+    )
+    src_tok.adapt([p[0] for p in train_pairs])
+    tgt_tok.adapt(["[start] " + p[1] + " [end]" for p in train_pairs])
+    return src_tok, tgt_tok
+
+
+def build_fr_en_tokenizers():
+    from keras import layers
+
+    train_pairs = _load_train_pairs()
+
+    src_tok = layers.TextVectorization(
+        max_tokens=VOCAB_SIZE, output_mode="int",
+        output_sequence_length=SEQ_LEN,
+        standardize=_custom_standardize,
+    )
+    tgt_tok = layers.TextVectorization(
+        max_tokens=VOCAB_SIZE, output_mode="int",
+        output_sequence_length=SEQ_LEN + 1,
+        standardize=_custom_standardize,
+    )
+    src_tok.adapt([p[1] for p in train_pairs])
+    tgt_tok.adapt(["[start] " + p[0] + " [end]" for p in train_pairs])
+    return src_tok, tgt_tok
+
+
+def _load_train_pairs():
+    """Parse fra.txt and return the same deterministic train split used everywhere."""
+    import random
 
     with open(TXT_PATH, encoding="utf-8") as f:
         lines = f.read().split("\n")[:-1]
@@ -78,20 +124,7 @@ def build_en_fr_tokenizers():
     random.shuffle(pairs)
     val_n = int(0.15 * len(pairs))
     train_n = len(pairs) - 2 * val_n
-    train_pairs = pairs[:train_n]
-
-    src_tok = layers.TextVectorization(
-        max_tokens=VOCAB_SIZE, output_mode="int",
-        output_sequence_length=SEQ_LEN,
-    )
-    tgt_tok = layers.TextVectorization(
-        max_tokens=VOCAB_SIZE, output_mode="int",
-        output_sequence_length=SEQ_LEN + 1,
-        standardize=_custom_standardize,
-    )
-    src_tok.adapt([p[0] for p in train_pairs])
-    tgt_tok.adapt(["[start] " + p[1] + " [end]" for p in train_pairs])
-    return src_tok, tgt_tok
+    return pairs[:train_n]
 
 
 def save_vocab(tok, path: Path):
@@ -231,23 +264,64 @@ def migrate_transformer():
 def main():
     MODELS_DIR.mkdir(exist_ok=True)
 
-    print("── Step 1: Build EN→FR vocabularies ────────────────────────────")
+    # ── Data (shared by both directions) ──────────────────────────────────────
     ensure_data()
-    src_tok, tgt_tok = build_en_fr_tokenizers()
-    save_vocab(src_tok, MODELS_DIR / "vocab_en_src.json")
-    save_vocab(tgt_tok, MODELS_DIR / "vocab_fr_tgt.json")
 
-    # Save config
+    # Save config once
     cfg = {"vocab_size": VOCAB_SIZE, "seq_len": SEQ_LEN, "batch_size": BATCH_SIZE}
     with open(MODELS_DIR / "config.json", "w") as f:
         json.dump(cfg, f, indent=2)
 
-    print("\n── Step 2: Migrate EN→FR models ─────────────────────────────────")
+    # ── Step 1: EN→FR vocabularies ────────────────────────────────────────────
+    print("── Step 1: EN→FR vocabularies ───────────────────────────────────")
+    src_tok, tgt_tok = build_en_fr_tokenizers()
+    save_vocab(src_tok, MODELS_DIR / "vocab_en_src.json")
+    save_vocab(tgt_tok, MODELS_DIR / "vocab_fr_tgt.json")
+
+    # ── Step 2: Migrate EN→FR notebook weights ────────────────────────────────
+    print("\n── Step 2: EN→FR model migration ────────────────────────────────")
     migrate_rnn()
     migrate_transformer()
 
-    print("\nDone. To add FR→EN support run:")
-    print("  python -m backend.train --dir fr_en")
+    # ── Step 3: FR→EN vocabularies ────────────────────────────────────────────
+    print("\n── Step 3: FR→EN vocabularies ───────────────────────────────────")
+    fr_src_path = MODELS_DIR / "vocab_fr_src.json"
+    en_tgt_path = MODELS_DIR / "vocab_en_tgt.json"
+
+    if fr_src_path.exists() and en_tgt_path.exists():
+        print("[vocab] vocab_fr_src.json and vocab_en_tgt.json already present — skipping rebuild.")
+    else:
+        print("[vocab] Building FR→EN vocabularies from fra.txt …")
+        fr_src_tok, en_tgt_tok = build_fr_en_tokenizers()
+        if not fr_src_path.exists():
+            save_vocab(fr_src_tok, fr_src_path)
+        if not en_tgt_path.exists():
+            save_vocab(en_tgt_tok, en_tgt_path)
+
+    # ── Step 4: FR→EN Colab model status ─────────────────────────────────────
+    print("\n── Step 4: FR→EN Colab model status ─────────────────────────────")
+    fr_en_models = {
+        "rnn_fr_en.keras":         MODELS_DIR / "rnn_fr_en.keras",
+        "transformer_fr_en.keras": MODELS_DIR / "transformer_fr_en.keras",
+    }
+    all_present = True
+    for name, path in fr_en_models.items():
+        if path.exists():
+            size_mb = path.stat().st_size / 1e6
+            print(f"[model] ✓  {name}  ({size_mb:.0f} MB)")
+        else:
+            print(f"[model] ✗  {name}  — not found")
+            all_present = False
+
+    print()
+    if all_present:
+        print("All artefacts ready. Start the web app with:")
+        print("  uvicorn backend.app:app --reload")
+    else:
+        print("FR→EN model files are missing.  Copy them from Google Drive:")
+        print("  Drive/MyDrive/translation_models/rnn_fr_en.keras")
+        print("  Drive/MyDrive/translation_models/transformer_fr_en.keras")
+        print("into your local models/ directory, then re-run this script.")
 
 
 if __name__ == "__main__":
