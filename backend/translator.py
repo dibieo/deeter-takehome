@@ -38,27 +38,34 @@ def _load_vocab(path: Path) -> list[str]:
         return json.load(f)
 
 
-def _build_tokenizer(vocab: list[str], seq_len: int):
-    """Reconstruct a TextVectorization layer from a saved vocabulary list."""
-    import re as _re
-    import string as _string
-    import tensorflow as tf
-    from keras import layers
+class _Tokenizer:
+    """
+    Pure-Python tokenizer backed by a saved vocabulary list.
 
-    _s = _string.punctuation.replace("[", "").replace("]", "")
-    _r = _re.escape(_s)
+    Avoids TextVectorization.set_vocabulary() whose special-token handling
+    (mask="" at 0, OOV="[UNK]" at 1) differs across Keras versions and can
+    silently shift every token index by 2, corrupting all translations.
 
-    def _standardize(x):
-        return tf.strings.regex_replace(tf.strings.lower(x), f"[{_r}]", "")
+    Contract: vocab[i] == the string the model learned as token i during
+    training, so word_to_idx[word] == the integer the model received for
+    that word.  The output of __call__ is a (len(texts), seq_len) int32
+    numpy array, which Keras model.predict accepts directly.
+    """
 
-    tok = layers.TextVectorization(
-        max_tokens=len(vocab),
-        output_mode="int",
-        output_sequence_length=seq_len,
-        standardize=_standardize,
-    )
-    tok.set_vocabulary(vocab)
-    return tok
+    def __init__(self, vocab: list[str], seq_len: int) -> None:
+        self._seq_len = seq_len
+        self._oov_idx = 1  # vocab[1] is always "[UNK]"
+        self._word_to_idx: dict[str, int] = {w: i for i, w in enumerate(vocab)}
+
+    def __call__(self, texts: list[str]) -> np.ndarray:
+        result = []
+        for text in texts:
+            tokens = _py_standardize(text).split()
+            ids = [self._word_to_idx.get(t, self._oov_idx) for t in tokens]
+            ids = ids[: self._seq_len]
+            ids += [0] * (self._seq_len - len(ids))
+            result.append(ids)
+        return np.array(result, dtype="int32")
 
 
 # ── Decoder ───────────────────────────────────────────────────────────────────
@@ -152,8 +159,8 @@ class TranslationEngine:
             src_vocab = _load_vocab(src_path)
             tgt_vocab = _load_vocab(tgt_path)
 
-            self._src_toks[direction] = _build_tokenizer(src_vocab, seq)
-            self._tgt_toks[direction] = _build_tokenizer(tgt_vocab, seq + 1)
+            self._src_toks[direction] = _Tokenizer(src_vocab, seq)
+            self._tgt_toks[direction] = _Tokenizer(tgt_vocab, seq + 1)
             self._tgt_lookups[direction] = dict(enumerate(tgt_vocab))
             logger.info("Tokenizers ready for %s.", direction)
 
