@@ -72,13 +72,18 @@ def _decode_greedy(
     is_transformer: bool,
 ) -> str:
     """Auto-regressive greedy decoding."""
+    # Read actual input names from the model so models saved with
+    # "english"/"french" (notebook) and "source"/"target" (our training
+    # script) both work without re-migration.
+    src_key, tgt_key = [inp.name for inp in model.inputs]
+
     decoded = "[start]"
     for i in range(seq_len):
         tgt_tokens = tgt_tok([decoded])  # (1, seq_len+1)
         if is_transformer:
             tgt_tokens = tgt_tokens[:, :-1]  # keep within positional embedding range
         preds = model.predict(
-            {"source": src_tokens, "target": tgt_tokens}, verbose=0
+            {src_key: src_tokens, tgt_key: tgt_tokens}, verbose=0
         )
         next_idx = int(np.argmax(preds[0, i, :]))
         next_tok = tgt_lookup.get(next_idx, "")
