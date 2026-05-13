@@ -101,6 +101,17 @@ class PositionalEmbedding(keras.Layer):
         )
         return config
 
+    @classmethod
+    def from_config(cls, config):
+        # The Colab notebook saved models with input_dim/output_dim; our code
+        # uses vocab_size/embed_dim.  Accept either so both load correctly.
+        config = config.copy()
+        if "input_dim" in config:
+            config["vocab_size"] = config.pop("input_dim")
+        if "output_dim" in config:
+            config["embed_dim"] = config.pop("output_dim")
+        return cls(**config)
+
 
 CUSTOM_OBJECTS = {
     "TransformerEncoder": TransformerEncoder,
