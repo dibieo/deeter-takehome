@@ -7,7 +7,7 @@ A full-stack machine translation application comparing two sequence modeling par
 | **GRU (Recurrent)** | Bidirectional encoder → single hidden state → GRU decoder | ~42 M |
 | **Transformer** | Multi-head self-attention + cross-attention + positional embeddings | ~18 M |
 
-Both models are trained from scratch on the [Tatoeba English–French corpus](http://www.manythings.org/anki/) (~190 k sentence pairs) and support **bidirectional translation** (EN→FR and FR→EN).
+Both models are trained from scratch on the [Tatoeba English–French corpus](http://www.manythings.org/anki/) (~160 k sentence pairs) and support **bidirectional translation** (EN→FR and FR→EN).
 
 ---
 
